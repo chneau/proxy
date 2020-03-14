@@ -231,7 +231,6 @@ func NewDefaultManager() *Manager {
 		Fetchers: []func() ([]*url.URL, error){
 			list.ProxiesFromClarketm,
 			list.ProxiesFromFate0,
-			list.ProxiesFromDxxzst,
 			list.ProxiesFromSunny9577,
 			list.ProxiesFromDailyFreeProxy,
 			list.ProxiesFromDailyProxy,

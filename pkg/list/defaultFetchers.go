@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/chneau/limiter"
@@ -128,27 +127,6 @@ func ProxiesFromFate0() ([]*url.URL, error) {
 	for scanner.Scan() {
 		json.Unmarshal(scanner.Bytes(), proxy)
 		urls = append(urls, &url.URL{Scheme: "http", Host: proxy.Host + ":" + strconv.Itoa(proxy.Port)})
-	}
-	return urls, nil
-}
-
-// ProxiesFromDxxzst returns proxies from dxxzst/free-proxy-list.
-func ProxiesFromDxxzst() ([]*url.URL, error) {
-	resp, err := http.Get("https://raw.githubusercontent.com/dxxzst/free-proxy-list/master/README.md")
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	bb, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	str := string(bb)
-	regex := regexp.MustCompile(`\d+\.\d+\.\d+\.\d+\|\d+`)
-	proxies := regex.FindAllString(str, -1)
-	urls := make([]*url.URL, len(proxies))
-	for i := range proxies {
-		urls[i] = &url.URL{Scheme: "http", Host: strings.ReplaceAll(proxies[i], "|", ":")}
 	}
 	return urls, nil
 }
