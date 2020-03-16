@@ -222,7 +222,7 @@ func (m *Manager) RemoveProxy(key string) {
 func (m *Manager) GratzProxy(key string) {
 	m.Mtx.Lock()
 	defer m.Mtx.Unlock()
-	m.ProxiesScore[key].Works = m.ProxiesScore[key].Works + 1
+	m.ProxiesScore[key].Works++
 }
 
 // NewDefaultManager ...
