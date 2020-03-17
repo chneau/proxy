@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"regexp"
 	"strconv"
 
@@ -14,12 +13,17 @@ import (
 )
 
 // ProxiesFromDailyFreeProxy returns proxies from https://www.dailyfreeproxy.com/.
-func ProxiesFromDailyFreeProxy() ([]*url.URL, error) {
-	doc, err := goquery.NewDocument("https://www.dailyfreeproxy.com/")
+func ProxiesFromDailyFreeProxy() ([]string, error) {
+	res, e := http.Get("https://www.dailyfreeproxy.com/")
+	if e != nil {
+		return nil, e
+	}
+	defer res.Body.Close()
+	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
 		return nil, err
 	}
-	urls := []*url.URL{}
+	urls := []string{}
 	limit := limiter.New(4)
 	doc.Find("h3 > a").Each(func(i int, s *goquery.Selection) {
 		next := s.AttrOr("href", "")
@@ -40,7 +44,7 @@ func ProxiesFromDailyFreeProxy() ([]*url.URL, error) {
 			regex := regexp.MustCompile(`\d+\.\d+\.\d+\.\d+:\d+`)
 			proxies := regex.FindAllString(str, -1)
 			for _, p := range proxies {
-				urls = append(urls, &url.URL{Scheme: "http", Host: p})
+				urls = append(urls, "http://"+p)
 			}
 		})
 	})
@@ -49,7 +53,7 @@ func ProxiesFromDailyFreeProxy() ([]*url.URL, error) {
 }
 
 // ProxiesFromSmallSeoTools returns proxies from https://smallseotools.com/free-proxy-list/.
-func ProxiesFromSmallSeoTools() ([]*url.URL, error) {
+func ProxiesFromSmallSeoTools() ([]string, error) {
 	resp, err := http.Get("https://smallseotools.com/free-proxy-list/")
 	if err != nil {
 		return nil, err
@@ -62,15 +66,15 @@ func ProxiesFromSmallSeoTools() ([]*url.URL, error) {
 	str := string(bb)
 	regex := regexp.MustCompile(`\d+\.\d+\.\d+\.\d+:\d+`)
 	proxies := regex.FindAllString(str, -1)
-	urls := make([]*url.URL, len(proxies))
+	urls := make([]string, len(proxies))
 	for i := range proxies {
-		urls[i] = &url.URL{Scheme: "http", Host: proxies[i]}
+		urls[i] = "http://" + proxies[i]
 	}
 	return urls, nil
 }
 
 // ProxiesFromDailyProxy returns proxies from https://proxy-daily.com/.
-func ProxiesFromDailyProxy() ([]*url.URL, error) {
+func ProxiesFromDailyProxy() ([]string, error) {
 	resp, err := http.Get("https://proxy-daily.com/")
 	if err != nil {
 		return nil, err
@@ -83,15 +87,15 @@ func ProxiesFromDailyProxy() ([]*url.URL, error) {
 	str := string(bb)
 	regex := regexp.MustCompile(`\d+\.\d+\.\d+\.\d+:\d+`)
 	proxies := regex.FindAllString(str, -1)
-	urls := make([]*url.URL, len(proxies))
+	urls := make([]string, len(proxies))
 	for i := range proxies {
-		urls[i] = &url.URL{Scheme: "http", Host: proxies[i]}
+		urls[i] = "http://" + proxies[i]
 	}
 	return urls, nil
 }
 
 // ProxiesFromClarketm returns proxies from clarketm/proxy-list.
-func ProxiesFromClarketm() ([]*url.URL, error) {
+func ProxiesFromClarketm() ([]string, error) {
 	resp, err := http.Get("https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list.txt")
 	if err != nil {
 		return nil, err
@@ -104,15 +108,15 @@ func ProxiesFromClarketm() ([]*url.URL, error) {
 	str := string(bb)
 	regex := regexp.MustCompile(`\d+\.\d+\.\d+\.\d+:\d+`)
 	proxies := regex.FindAllString(str, -1)
-	urls := make([]*url.URL, len(proxies))
+	urls := make([]string, len(proxies))
 	for i := range proxies {
-		urls[i] = &url.URL{Scheme: "http", Host: proxies[i]}
+		urls[i] = "http://" + proxies[i]
 	}
 	return urls, nil
 }
 
 // ProxiesFromFate0 returns proxies from fate0/proxylist.
-func ProxiesFromFate0() ([]*url.URL, error) {
+func ProxiesFromFate0() ([]string, error) {
 	resp, err := http.Get("https://raw.githubusercontent.com/fate0/proxylist/master/proxy.list")
 	if err != nil {
 		return nil, err
@@ -123,24 +127,24 @@ func ProxiesFromFate0() ([]*url.URL, error) {
 		Host string `json:"host"`
 		Port int    `json:"port"`
 	}{}
-	urls := []*url.URL{}
+	urls := []string{}
 	for scanner.Scan() {
-		json.Unmarshal(scanner.Bytes(), proxy)
-		urls = append(urls, &url.URL{Scheme: "http", Host: proxy.Host + ":" + strconv.Itoa(proxy.Port)})
+		err = json.Unmarshal(scanner.Bytes(), proxy)
+		if err != nil {
+			return nil, err
+		}
+		urls = append(urls, "http://"+proxy.Host+":"+strconv.Itoa(proxy.Port))
 	}
 	return urls, nil
 }
 
 type proxy struct {
-	IP        string `json:"ip"`
-	Port      string `json:"port"`
-	Country   string `json:"country"`
-	Anonymity string `json:"anonymity"`
-	Type      string `json:"type"`
+	IP   string `json:"ip"`
+	Port string `json:"port"`
 }
 
 // ProxiesFromSunny9577 returns proxies from sunny9577/proxy-scraper.
-func ProxiesFromSunny9577() ([]*url.URL, error) {
+func ProxiesFromSunny9577() ([]string, error) {
 	resp, err := http.Get("https://raw.githubusercontent.com/sunny9577/proxy-scraper/master/proxies.json")
 	if err != nil {
 		return nil, err
@@ -152,16 +156,19 @@ func ProxiesFromSunny9577() ([]*url.URL, error) {
 		Usproxy     []proxy `json:"usproxy"`
 		Hidemyname  []proxy `json:"hidemyname"`
 	}{}
-	json.NewDecoder(resp.Body).Decode(proxies)
-	urls := []*url.URL{}
+	err = json.NewDecoder(resp.Body).Decode(proxies)
+	if err != nil {
+		return nil, err
+	}
+	urls := []string{}
 	for _, proxy := range proxies.Proxynova {
-		urls = append(urls, &url.URL{Scheme: "http", Host: proxy.IP + ":" + proxy.Port})
+		urls = append(urls, "http://"+proxy.IP+":"+proxy.Port)
 	}
 	for _, proxy := range proxies.Usproxy {
-		urls = append(urls, &url.URL{Scheme: "http", Host: proxy.IP + ":" + proxy.Port})
+		urls = append(urls, "http://"+proxy.IP+":"+proxy.Port)
 	}
 	for _, proxy := range proxies.Hidemyname {
-		urls = append(urls, &url.URL{Scheme: "http", Host: proxy.IP + ":" + proxy.Port})
+		urls = append(urls, "http://"+proxy.IP+":"+proxy.Port)
 	}
 	return urls, nil
 }

@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -22,11 +23,11 @@ type Information struct {
 
 // Manager ...
 type Manager struct {
-	Proxies      []*url.URL
+	Proxies      []string
 	LastFetch    time.Time
 	ProxyRefresh time.Duration
 
-	Fetchers       []func() ([]*url.URL, error)
+	Fetchers       []func() ([]string, error)
 	Timeout        time.Duration
 	MaxConcurrency int
 	Filter         float64
@@ -38,17 +39,17 @@ type Manager struct {
 }
 
 // GetProxies ...
-func (m *Manager) GetProxies() ([]*url.URL, error) {
+func (m *Manager) GetProxies() ([]string, error) {
 	if m.LastFetch.Add(m.ProxyRefresh).After(time.Now()) {
 		return m.Proxies, nil
 	}
-	proxiesToTest := map[string]*url.URL{}
+	proxiesToTest := map[string]string{}
 	mtx := sync.Mutex{}
 	wg := sync.WaitGroup{}
 	var err error
 	wg.Add(len(m.Fetchers))
 	for _, fetcher := range m.Fetchers {
-		go func(fetcher func() ([]*url.URL, error)) {
+		go func(fetcher func() ([]string, error)) {
 			defer wg.Done()
 			proxies, e := fetcher()
 			if e != nil {
@@ -58,7 +59,7 @@ func (m *Manager) GetProxies() ([]*url.URL, error) {
 			mtx.Lock()
 			defer mtx.Unlock()
 			for i := range proxies {
-				proxiesToTest[proxies[i].Host] = proxies[i]
+				proxiesToTest[proxies[i]] = proxies[i]
 			}
 		}(fetcher)
 	}
@@ -66,11 +67,11 @@ func (m *Manager) GetProxies() ([]*url.URL, error) {
 	if err != nil {
 		return nil, err
 	}
-	urls := []*url.URL{}
+	urls := []string{}
 	for _, proxy := range proxiesToTest {
 		urls = append(urls, proxy)
-		if _, exist := m.ProxiesScore[proxy.Host]; !exist {
-			m.ProxiesScore[proxy.Host] = &Information{}
+		if _, exist := m.ProxiesScore[proxy]; !exist {
+			m.ProxiesScore[proxy] = &Information{}
 		}
 	}
 	m.LastFetch = time.Now()
@@ -103,51 +104,54 @@ func (m *Manager) TestProxies() error {
 	filter := time.Duration(float64(m.Timeout) * m.Filter)
 	limit := limiter.New(m.MaxConcurrency)
 	for i := range proxies {
-		proxyHost := proxies[i]
-		key := proxyHost.Host
-		if m.IsProxyBad(key) {
+		i := i
+		if m.IsProxyBad(proxies[i]) {
 			m.Mtx.Lock()
-			delete(m.GoodProxies, key) // without scoring
+			delete(m.GoodProxies, proxies[i]) // without scoring
 			m.Mtx.Unlock()
 			continue
 		}
 		limit.Execute(func() {
+			parsedURL, err := url.Parse(proxies[i])
+			if err != nil {
+				log.Println("Could not parse URL", proxies[i])
+			}
 			client := &http.Client{
 				Timeout: m.Timeout,
 				Transport: &http.Transport{
 					DisableKeepAlives: true,
-					Proxy:             http.ProxyURL(proxyHost),
+					Proxy:             http.ProxyURL(parsedURL),
 					Dial:              dial,
 				},
 			}
 			start := time.Now()
 			resp, err := client.Get(m.URLTest)
 			if err != nil {
-				m.RemoveProxy(key)
+				m.RemoveProxy(proxies[i])
 				return
 			}
 			defer resp.Body.Close()
 			b, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
-				m.RemoveProxy(key)
+				m.RemoveProxy(proxies[i])
 				return
 			}
 			returnedIP := net.ParseIP(string(b))
 			if returnedIP == nil {
-				m.RemoveProxy(key)
+				m.RemoveProxy(proxies[i])
 				return
 			}
 			if ip.Equal(returnedIP) {
-				m.AddBadProxy(key)
-				m.RemoveProxy(key)
+				m.AddBadProxy(proxies[i])
+				m.RemoveProxy(proxies[i])
 				return
 			}
-			duration := time.Now().Sub(start)
+			duration := time.Since(start)
 			if duration > filter {
-				m.RemoveProxy(key)
+				m.RemoveProxy(proxies[i])
 				return
 			}
-			m.AddProxy(key, client)
+			m.AddProxy(proxies[i], client)
 		})
 	}
 	limit.Wait()
@@ -228,7 +232,7 @@ func (m *Manager) GratzProxy(key string) {
 // NewDefaultManager ...
 func NewDefaultManager() *Manager {
 	manager := &Manager{
-		Fetchers: []func() ([]*url.URL, error){
+		Fetchers: []func() ([]string, error){
 			list.ProxiesFromClarketm,
 			list.ProxiesFromFate0,
 			list.ProxiesFromSunny9577,

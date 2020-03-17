@@ -1,13 +1,12 @@
 package list
 
 import (
-	"net/url"
 	"sync"
 	"testing"
 )
 
 func TestAll(t *testing.T) {
-	proxies := map[string]func() ([]*url.URL, error){
+	proxies := map[string]func() ([]string, error){
 		"ProxiesFromClarketm":       ProxiesFromClarketm,
 		"ProxiesFromDailyFreeProxy": ProxiesFromDailyFreeProxy,
 		"ProxiesFromDailyProxy":     ProxiesFromDailyProxy,
