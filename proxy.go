@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"sync"
 	"time"
 
@@ -55,11 +56,30 @@ func (m *Manager) PunishProxy(proxy string) {
 	}
 }
 
+type proxies struct {
+	Proxy  string
+	Strike int
+}
+
+func (m *Manager) sortedGoodProxies() []proxies {
+	x := []proxies{}
+	for k, v := range m.ProxiesGoodStrikes {
+		x = append(x, proxies{Proxy: k, Strike: v})
+	}
+	sort.Slice(x, func(i, j int) bool {
+		return x[i].Strike < x[j].Strike
+	})
+	return x
+}
+
 func (m *Manager) GetGoodProxy() (string, *http.Client) {
 	m.MtxGood.Lock()
 	defer m.MtxGood.Unlock()
+	m.sortedGoodProxies()
 	proxy := ""
-	for k, v := range m.ProxiesGood {
+	for _, x := range m.sortedGoodProxies() {
+		k := x.Proxy
+		v := m.ProxiesGood[k]
 		if len(v) < m.Requests {
 			proxy = k
 			break
@@ -97,6 +117,9 @@ func (m *Manager) addProxyGood(str string) {
 	defer m.MtxGood.Unlock()
 	if _, exist := m.ProxiesGood[str]; !exist {
 		m.ProxiesGood[str] = []time.Time{}
+	}
+	if _, exist := m.ProxiesGoodStrikes[str]; !exist {
+		m.ProxiesGoodStrikes[str] = 0
 	}
 }
 
