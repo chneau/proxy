@@ -1,4 +1,4 @@
-package list
+package proxylist
 
 import (
 	"bufio"
