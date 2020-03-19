@@ -19,6 +19,7 @@ type Manager struct {
 	IP            net.IP
 	ProxiesTested map[string]int
 	MtxTest       sync.Mutex
+	FuncTest      func(*http.Client) bool
 
 	// good to use
 	MtxGood            sync.Mutex
@@ -47,7 +48,6 @@ func (m *Manager) PunishProxy(proxy string) {
 	if m.ProxiesGoodStrikes[proxy] >= m.StrikeLimit {
 		delete(m.ProxiesGoodStrikes, proxy)
 		delete(m.ProxiesGood, proxy)
-		m.AddProxies(proxy)
 	}
 }
 
@@ -135,6 +135,10 @@ func (m *Manager) test(client *http.Client, p string) {
 		m.modifyTest(p, -10)
 		return
 	}
+	if !m.FuncTest(client) {
+		m.modifyTest(p, -3)
+		return
+	}
 	m.modifyTest(p, 1)
 	m.addProxyGood(p)
 }
@@ -144,6 +148,11 @@ func (m *Manager) autoProxyTester() {
 	for p := range m.ProxiesTest {
 		m.test(client, p)
 	}
+}
+
+func (m *Manager) WithFuncTest(fn func(*http.Client) bool) *Manager {
+	m.FuncTest = fn
+	return m
 }
 
 func (m *Manager) WithAutoProxyTester(concurrentTest int) *Manager {
@@ -176,6 +185,7 @@ func NewDefaultManager() *Manager {
 		ProxiesTested:      map[string]int{},
 		ProxiesGood:        map[string][]time.Time{},
 		ProxiesGoodStrikes: map[string]int{},
+		FuncTest:           func(*http.Client) bool { return true },
 		StrikeLimit:        5,
 		TimeoutTest:        time.Second * 3,
 		TimeoutGood:        time.Second * 4,
