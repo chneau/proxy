@@ -13,17 +13,17 @@ import (
 
 type Manager struct {
 	// testing
-	proxiesTest   chan string
+	ProxiesTest   chan string
 	TimeoutTest   time.Duration
 	URLTest       string
-	ip            net.IP
-	proxiesTested map[string]int
-	mtxTest       sync.Mutex
+	IP            net.IP
+	ProxiesTested map[string]int
+	MtxTest       sync.Mutex
 
 	// good to use
-	mtxGood            sync.Mutex
-	proxiesGood        map[string][]time.Time
-	proxiesGoodStrikes map[string]int
+	MtxGood            sync.Mutex
+	ProxiesGood        map[string][]time.Time
+	ProxiesGoodStrikes map[string]int
 	StrikeLimit        int
 	Requests           int
 	TimeWindow         time.Duration
@@ -31,31 +31,31 @@ type Manager struct {
 }
 
 func (m *Manager) addTimeToGoodProxy(proxy string) {
-	m.proxiesGood[proxy] = append(m.proxiesGood[proxy], time.Now())
-	if len(m.proxiesGood[proxy]) > m.Requests {
-		m.proxiesGood[proxy] = m.proxiesGood[proxy][1:]
+	m.ProxiesGood[proxy] = append(m.ProxiesGood[proxy], time.Now())
+	if len(m.ProxiesGood[proxy]) > m.Requests {
+		m.ProxiesGood[proxy] = m.ProxiesGood[proxy][1:]
 	}
 }
 
 func (m *Manager) PunishProxy(proxy string) {
-	m.mtxGood.Lock()
-	defer m.mtxGood.Unlock()
+	m.MtxGood.Lock()
+	defer m.MtxGood.Unlock()
 	for i := 0; i < m.Requests; i++ {
 		m.addTimeToGoodProxy(proxy)
 	}
-	m.proxiesGoodStrikes[proxy]++
-	if m.proxiesGoodStrikes[proxy] >= m.StrikeLimit {
-		delete(m.proxiesGoodStrikes, proxy)
-		delete(m.proxiesGood, proxy)
+	m.ProxiesGoodStrikes[proxy]++
+	if m.ProxiesGoodStrikes[proxy] >= m.StrikeLimit {
+		delete(m.ProxiesGoodStrikes, proxy)
+		delete(m.ProxiesGood, proxy)
 		m.AddProxies(proxy)
 	}
 }
 
 func (m *Manager) GetGoodProxy() (string, *http.Client) {
-	m.mtxGood.Lock()
-	defer m.mtxGood.Unlock()
+	m.MtxGood.Lock()
+	defer m.MtxGood.Unlock()
 	proxy := ""
-	for k, v := range m.proxiesGood {
+	for k, v := range m.ProxiesGood {
 		if len(v) < m.Requests {
 			proxy = k
 			break
@@ -74,7 +74,7 @@ func (m *Manager) GetGoodProxy() (string, *http.Client) {
 
 func (m *Manager) addProxies(proxies ...string) {
 	for i := range proxies {
-		m.proxiesTest <- proxies[i]
+		m.ProxiesTest <- proxies[i]
 	}
 }
 
@@ -83,29 +83,29 @@ func (m *Manager) AddProxies(proxies ...string) {
 }
 
 func (m *Manager) removeProxyGood(str string) {
-	m.mtxGood.Lock()
-	defer m.mtxGood.Unlock()
-	delete(m.proxiesGood, str)
+	m.MtxGood.Lock()
+	defer m.MtxGood.Unlock()
+	delete(m.ProxiesGood, str)
 }
 
 func (m *Manager) addProxyGood(str string) {
-	m.mtxGood.Lock()
-	defer m.mtxGood.Unlock()
-	if _, exist := m.proxiesGood[str]; !exist {
-		m.proxiesGood[str] = []time.Time{}
+	m.MtxGood.Lock()
+	defer m.MtxGood.Unlock()
+	if _, exist := m.ProxiesGood[str]; !exist {
+		m.ProxiesGood[str] = []time.Time{}
 	}
 }
 
 func (m *Manager) modifyTest(str string, delta int) {
-	m.mtxTest.Lock()
-	defer m.mtxTest.Unlock()
-	m.proxiesTested[str] = m.proxiesTested[str] + delta
+	m.MtxTest.Lock()
+	defer m.MtxTest.Unlock()
+	m.ProxiesTested[str] = m.ProxiesTested[str] + delta
 }
 
 func (m *Manager) readTest(str string) int {
-	m.mtxTest.Lock()
-	defer m.mtxTest.Unlock()
-	return m.proxiesTested[str]
+	m.MtxTest.Lock()
+	defer m.MtxTest.Unlock()
+	return m.ProxiesTested[str]
 }
 
 func (m *Manager) test(client *http.Client, p string) {
@@ -131,7 +131,7 @@ func (m *Manager) test(client *http.Client, p string) {
 		m.AddProxies(p)
 		return
 	}
-	if m.ip.Equal(returnedIP) {
+	if m.IP.Equal(returnedIP) {
 		m.modifyTest(p, -10)
 		return
 	}
@@ -141,13 +141,13 @@ func (m *Manager) test(client *http.Client, p string) {
 
 func (m *Manager) autoProxyTester() {
 	client := clientFromString(m.TimeoutTest, "")
-	for p := range m.proxiesTest {
+	for p := range m.ProxiesTest {
 		m.test(client, p)
 	}
 }
 
 func (m *Manager) WithAutoProxyTester(concurrentTest int) *Manager {
-	m.ip = getIP(m.URLTest)
+	m.IP = getIP(m.URLTest)
 	for i := 0; i < concurrentTest; i++ {
 		go m.autoProxyTester()
 	}
@@ -171,11 +171,11 @@ func (m *Manager) WithAutoRefresh(every time.Duration) *Manager {
 
 func NewDefaultManager() *Manager {
 	m := &Manager{
-		proxiesTest:        make(chan string, 1000),
+		ProxiesTest:        make(chan string, 1000),
 		URLTest:            "http://api.ipify.org/",
-		proxiesTested:      map[string]int{},
-		proxiesGood:        map[string][]time.Time{},
-		proxiesGoodStrikes: map[string]int{},
+		ProxiesTested:      map[string]int{},
+		ProxiesGood:        map[string][]time.Time{},
+		ProxiesGoodStrikes: map[string]int{},
 		StrikeLimit:        5,
 		TimeoutTest:        time.Second * 3,
 		TimeoutGood:        time.Second * 4,
