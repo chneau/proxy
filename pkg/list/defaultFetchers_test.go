@@ -6,7 +6,7 @@ import (
 )
 
 func TestAll(t *testing.T) {
-	proxies := map[string]func() ([]string, error){
+	proxies := map[string]func() []string{
 		"ProxiesFromClarketm":       ProxiesFromClarketm,
 		"ProxiesFromDailyFreeProxy": ProxiesFromDailyFreeProxy,
 		"ProxiesFromDailyProxy":     ProxiesFromDailyProxy,
@@ -21,9 +21,9 @@ func TestAll(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			prx := proxies[name]
-			found, err := prx()
-			if len(found) == 0 || err != nil {
-				t.Error(name, len(found), err)
+			found := prx()
+			if len(found) == 0 {
+				t.Error(name, len(found))
 			}
 		}()
 	}
