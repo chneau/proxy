@@ -171,15 +171,16 @@ func (m *Manager) WithAutoRefresh(every time.Duration) *Manager {
 
 func NewDefaultManager() *Manager {
 	m := &Manager{
-		proxiesTest:   make(chan string, 1000),
-		URLTest:       "http://api.ipify.org/",
-		proxiesTested: map[string]int{},
-		proxiesGood:   map[string][]time.Time{},
-		StrikeLimit:   5,
-		TimeoutTest:   time.Second * 3,
-		TimeoutGood:   time.Second * 4,
-		TimeWindow:    time.Second * 12,
-		Requests:      16,
+		proxiesTest:        make(chan string, 1000),
+		URLTest:            "http://api.ipify.org/",
+		proxiesTested:      map[string]int{},
+		proxiesGood:        map[string][]time.Time{},
+		proxiesGoodStrikes: map[string]int{},
+		StrikeLimit:        5,
+		TimeoutTest:        time.Second * 3,
+		TimeoutGood:        time.Second * 4,
+		TimeWindow:         time.Second * 12,
+		Requests:           16,
 	}
 	return m
 }
