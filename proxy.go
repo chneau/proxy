@@ -38,6 +38,13 @@ func (m *Manager) addTimeToGoodProxy(proxy string) {
 	}
 }
 
+func (m *Manager) ForgiveProxy(proxy string) {
+	m.MtxGood.Lock()
+	defer m.MtxGood.Unlock()
+	m.ProxiesGoodStrikes[proxy]--
+	m.ProxiesGoodStrikes[proxy]--
+}
+
 func (m *Manager) PunishProxy(proxy string) {
 	m.MtxGood.Lock()
 	defer m.MtxGood.Unlock()
@@ -183,7 +190,7 @@ func NewDefaultManager() *Manager {
 		ProxiesGood:        map[string][]time.Time{},
 		ProxiesGoodStrikes: map[string]int{},
 		FuncTest:           func(*http.Client) bool { return true },
-		StrikeLimit:        5,
+		StrikeLimit:        10,
 		TimeoutTest:        time.Second * 3,
 		TimeoutGood:        time.Second * 4,
 		TimeWindow:         time.Second * 12,
