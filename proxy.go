@@ -41,9 +41,6 @@ func (m *Manager) addTimeToGoodProxy(proxy string) {
 func (m *Manager) PunishProxy(proxy string) {
 	m.MtxGood.Lock()
 	defer m.MtxGood.Unlock()
-	for i := 0; i < m.Requests; i++ {
-		m.addTimeToGoodProxy(proxy)
-	}
 	m.ProxiesGoodStrikes[proxy]++
 	if m.ProxiesGoodStrikes[proxy] >= m.StrikeLimit {
 		delete(m.ProxiesGoodStrikes, proxy)
