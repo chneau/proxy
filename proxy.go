@@ -59,7 +59,6 @@ func (m *Manager) PunishProxy(proxy string) {
 	if m.ProxiesGoodStrikes[proxy] >= m.StrikeLimit {
 		delete(m.ProxiesGoodStrikes, proxy)
 		delete(m.ProxiesGood, proxy)
-		m.AddProxies(proxy)
 	}
 }
 
