@@ -29,6 +29,7 @@ type Manager struct {
 	ProxiesGoodStrikes map[string]int
 	StrikeLimit        int
 	Requests           int
+	Wait               time.Duration
 	TimeWindow         time.Duration
 	TimeoutGood        time.Duration
 }
@@ -88,6 +89,9 @@ func (m *Manager) GetGoodProxy() (string, *http.Client) {
 		if len(v) < m.Requests {
 			proxy = k
 			break
+		}
+		if time.Since(v[len(v)-1]) < m.Wait {
+			continue
 		}
 		if time.Since(v[0]) > m.TimeWindow {
 			proxy = k
@@ -242,6 +246,7 @@ func NewDefaultManager() *Manager {
 		ProxiesBanned:      map[string]bool{},
 		FuncTest:           func(*http.Client) bool { return true },
 		StrikeLimit:        10,
+		Wait:               time.Millisecond * 200,
 		TimeoutTest:        time.Second * 3,
 		TimeoutGood:        time.Second * 4,
 		TimeWindow:         time.Second * 12,
