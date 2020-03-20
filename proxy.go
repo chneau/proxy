@@ -19,6 +19,7 @@ type Manager struct {
 	URLTest       string
 	IP            net.IP
 	ProxiesTested map[string]int
+	ProxiesBanned map[string]bool
 	MtxTest       sync.Mutex
 	FuncTest      func(*http.Client) bool
 
@@ -49,10 +50,15 @@ func (m *Manager) ForgiveProxy(proxy string) {
 func (m *Manager) PunishProxy(proxy string) {
 	m.MtxGood.Lock()
 	defer m.MtxGood.Unlock()
-	m.ProxiesGoodStrikes[proxy]++
+	punishment := 1
+	if score := -(m.ProxiesGoodStrikes[proxy] / 10); score > punishment {
+		punishment = score
+	}
+	m.ProxiesGoodStrikes[proxy] += punishment
 	if m.ProxiesGoodStrikes[proxy] >= m.StrikeLimit {
 		delete(m.ProxiesGoodStrikes, proxy)
 		delete(m.ProxiesGood, proxy)
+		m.AddProxies(proxy)
 	}
 }
 
@@ -75,7 +81,6 @@ func (m *Manager) sortedGoodProxies() []proxies {
 func (m *Manager) GetGoodProxy() (string, *http.Client) {
 	m.MtxGood.Lock()
 	defer m.MtxGood.Unlock()
-	m.sortedGoodProxies()
 	proxy := ""
 	for _, x := range m.sortedGoodProxies() {
 		k := x.Proxy
@@ -106,68 +111,90 @@ func (m *Manager) AddProxies(proxies ...string) {
 	go m.addProxies(proxies...)
 }
 
-func (m *Manager) removeProxyGood(str string) {
+func (m *Manager) removeProxyGood(proxy string) {
 	m.MtxGood.Lock()
 	defer m.MtxGood.Unlock()
-	delete(m.ProxiesGood, str)
+	delete(m.ProxiesGood, proxy)
 }
 
-func (m *Manager) addProxyGood(str string) {
+func (m *Manager) addProxyGood(proxy string) {
 	m.MtxGood.Lock()
 	defer m.MtxGood.Unlock()
-	if _, exist := m.ProxiesGood[str]; !exist {
-		m.ProxiesGood[str] = []time.Time{}
+	if _, exist := m.ProxiesGood[proxy]; !exist {
+		m.ProxiesGood[proxy] = []time.Time{}
 	}
-	if _, exist := m.ProxiesGoodStrikes[str]; !exist {
-		m.ProxiesGoodStrikes[str] = 0
+	if _, exist := m.ProxiesGoodStrikes[proxy]; !exist {
+		m.ProxiesGoodStrikes[proxy] = 0
 	}
 }
 
-func (m *Manager) modifyTest(str string, delta int) {
+func (m *Manager) modifyTest(proxy string, delta int) {
 	m.MtxTest.Lock()
 	defer m.MtxTest.Unlock()
-	m.ProxiesTested[str] = m.ProxiesTested[str] + delta
+	m.ProxiesTested[proxy] = m.ProxiesTested[proxy] + delta
 }
 
-func (m *Manager) readTest(str string) int {
+func (m *Manager) readTest(proxy string) int {
 	m.MtxTest.Lock()
 	defer m.MtxTest.Unlock()
-	return m.ProxiesTested[str]
+	return m.ProxiesTested[proxy]
 }
 
-func (m *Manager) test(client *http.Client, p string) {
-	if m.readTest(p) <= -10 {
+func (m *Manager) ban(proxy string) {
+	m.MtxTest.Lock()
+	defer m.MtxTest.Unlock()
+	m.ProxiesBanned[proxy] = true
+}
+
+func (m *Manager) isBanned(proxy string) bool {
+	m.MtxTest.Lock()
+	defer m.MtxTest.Unlock()
+	return m.ProxiesBanned[proxy]
+}
+
+func (m *Manager) test(client *http.Client, proxy string) {
+	if m.isBanned(proxy) {
 		return
 	}
-	client.Transport.(*http.Transport).Proxy = http.ProxyURL(strToURL(p))
+	if m.readTest(proxy) <= -10 {
+		m.modifyTest(proxy, -10)
+		score := m.readTest(proxy)
+		if score <= -50 {
+			m.modifyTest(proxy, -score)
+			m.AddProxies(proxy)
+		}
+		return
+	}
+	client.Transport.(*http.Transport).Proxy = http.ProxyURL(strToURL(proxy))
 	resp, err := client.Get(m.URLTest)
 	if err != nil {
-		m.modifyTest(p, -1)
-		m.AddProxies(p)
+		m.modifyTest(proxy, -1)
+		m.AddProxies(proxy)
 		return
 	}
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		m.modifyTest(p, -1)
-		m.AddProxies(p)
+		m.modifyTest(proxy, -1)
+		m.AddProxies(proxy)
 		return
 	}
 	returnedIP := net.ParseIP(string(b))
 	if returnedIP == nil {
-		m.modifyTest(p, -1)
-		m.AddProxies(p)
+		m.modifyTest(proxy, -1)
+		m.AddProxies(proxy)
 		return
 	}
 	if m.IP.Equal(returnedIP) {
-		m.modifyTest(p, -10)
+		m.modifyTest(proxy, -10)
+		m.ban(proxy)
 		return
 	}
 	if !m.FuncTest(client) {
-		m.modifyTest(p, -3)
+		m.modifyTest(proxy, -3)
 		return
 	}
-	m.modifyTest(p, 1)
-	m.addProxyGood(p)
+	m.modifyTest(proxy, 1)
+	m.addProxyGood(proxy)
 }
 
 func (m *Manager) autoProxyTester() {
@@ -212,6 +239,7 @@ func NewDefaultManager() *Manager {
 		ProxiesTested:      map[string]int{},
 		ProxiesGood:        map[string][]time.Time{},
 		ProxiesGoodStrikes: map[string]int{},
+		ProxiesBanned:      map[string]bool{},
 		FuncTest:           func(*http.Client) bool { return true },
 		StrikeLimit:        10,
 		TimeoutTest:        time.Second * 3,
