@@ -2,10 +2,12 @@ package proxy
 
 import (
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -168,7 +170,7 @@ func (m *Manager) test(client *http.Client, proxy string) {
 		}
 		return
 	}
-	client.Transport.(*http.Transport).Proxy = http.ProxyURL(strToURL(proxy))
+	client.Transport.(*FakeTransport).Proxy = http.ProxyURL(strToURL(proxy))
 	resp, err := client.Get(m.URLTest)
 	if err != nil {
 		m.modifyTest(proxy, -1)
@@ -273,13 +275,27 @@ func getIP(urlIP string) net.IP {
 }
 
 func clientFromString(timeout time.Duration, proxy string) *http.Client {
-	client := &http.Client{
-		Timeout: timeout,
+	var transport http.RoundTripper = &FakeTransport{
 		Transport: &http.Transport{
 			DisableKeepAlives: true,
 			Proxy:             http.ProxyURL(strToURL(proxy)),
 			Dial:              (&net.Dialer{Timeout: timeout, KeepAlive: timeout}).Dial,
 		},
 	}
+	client := &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
+	}
 	return client
+}
+
+var _ http.RoundTripper = (*FakeTransport)(nil)
+
+type FakeTransport struct {
+	*http.Transport
+}
+
+func (ft *FakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("X-Forwarded-For", strconv.Itoa(rand.Intn(256))+"."+strconv.Itoa(rand.Intn(256))+"."+strconv.Itoa(rand.Intn(256))+"."+strconv.Itoa(rand.Intn(256)))
+	return ft.Transport.RoundTrip(req)
 }
