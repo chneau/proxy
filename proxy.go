@@ -103,7 +103,7 @@ func (m *Manager) GetGoodProxy() (string, *http.Client) {
 		return "", nil
 	}
 	m.addTimeToGoodProxy(proxy)
-	return proxy, clientFromString(m.TimeoutGood, proxy)
+	return proxy, m.clientFromString(m.TimeoutGood, proxy)
 }
 
 func (m *Manager) addProxies(proxies ...string) {
@@ -203,7 +203,7 @@ func (m *Manager) test(client *http.Client, proxy string) {
 }
 
 func (m *Manager) autoProxyTester() {
-	client := clientFromString(m.TimeoutTest, "")
+	client := m.clientFromString(m.TimeoutTest, "")
 	for p := range m.ProxiesTest {
 		m.test(client, p)
 	}
@@ -274,8 +274,25 @@ func getIP(urlIP string) net.IP {
 	return net.ParseIP(string(b))
 }
 
-func clientFromString(timeout time.Duration, proxy string) *http.Client {
+func (m *Manager) clientFromString(timeout time.Duration, proxy string) *http.Client {
+	m.MtxTest.Lock()
+	defer m.MtxTest.Unlock()
+	fakeXFF := ""
+	if len(m.ProxiesTested) > 10 {
+		proxies := []string{}
+		for k := range m.ProxiesTested {
+			proxies = append(proxies, k)
+		}
+		fakeXFFUrl, err := url.Parse(proxies[rand.Intn(len(proxies))])
+		if err == nil {
+			fakeXFF = fakeXFFUrl.Hostname()
+		}
+	}
+	if fakeXFF == "" {
+		fakeXFF = strconv.Itoa(rand.Intn(256)) + "." + strconv.Itoa(rand.Intn(256)) + "." + strconv.Itoa(rand.Intn(256)) + "." + strconv.Itoa(rand.Intn(256))
+	}
 	var transport http.RoundTripper = &FakeTransport{
+		fakeXFF: fakeXFF,
 		Transport: &http.Transport{
 			DisableKeepAlives: true,
 			Proxy:             http.ProxyURL(strToURL(proxy)),
@@ -292,10 +309,11 @@ func clientFromString(timeout time.Duration, proxy string) *http.Client {
 var _ http.RoundTripper = (*FakeTransport)(nil)
 
 type FakeTransport struct {
+	fakeXFF string
 	*http.Transport
 }
 
 func (ft *FakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.Header.Set("X-Forwarded-For", strconv.Itoa(rand.Intn(256))+"."+strconv.Itoa(rand.Intn(256))+"."+strconv.Itoa(rand.Intn(256))+"."+strconv.Itoa(rand.Intn(256)))
+	req.Header.Set("X-Forwarded-For", ft.fakeXFF)
 	return ft.Transport.RoundTrip(req)
 }
