@@ -282,6 +282,9 @@ func (m *Manager) clientFromString(timeout time.Duration, proxy string) *http.Cl
 		proxies := []string{}
 		for k := range m.ProxiesTested {
 			proxies = append(proxies, k)
+			if len(proxies) > 1000 {
+				break
+			}
 		}
 		fakeXFFUrl, err := url.Parse(proxies[rand.Intn(len(proxies))])
 		if err == nil {
