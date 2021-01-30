@@ -116,12 +116,6 @@ func (m *Manager) AddProxies(proxies ...string) {
 	go m.addProxies(proxies...)
 }
 
-func (m *Manager) removeProxyGood(proxy string) {
-	m.MtxGood.Lock()
-	defer m.MtxGood.Unlock()
-	delete(m.ProxiesGood, proxy)
-}
-
 func (m *Manager) addProxyGood(proxy string) {
 	m.MtxGood.Lock()
 	defer m.MtxGood.Unlock()
@@ -225,12 +219,7 @@ func (m *Manager) WithAutoProxyTester(concurrentTest int) *Manager {
 func (m *Manager) WithAutoRefresh(every time.Duration) *Manager {
 	go func() {
 		for {
-			m.AddProxies(proxylist.ProxiesFromClarketm()...)
-			m.AddProxies(proxylist.ProxiesFromDailyFreeProxy()...)
-			m.AddProxies(proxylist.ProxiesFromDailyProxy()...)
-			m.AddProxies(proxylist.ProxiesFromFate0()...)
-			m.AddProxies(proxylist.ProxiesFromSmallSeoTools()...)
-			m.AddProxies(proxylist.ProxiesFromSunny9577()...)
+			m.AddProxies(proxylist.All()...)
 			time.Sleep(every)
 		}
 	}()
