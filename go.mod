@@ -1,4 +1,4 @@
-module github.com/chneau/proxy
+module github.com/chneau/proxy/v2
 
 go 1.15
 

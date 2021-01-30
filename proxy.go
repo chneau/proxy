@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chneau/proxy/pkg/proxylist"
+	"github.com/chneau/proxy/v2/pkg/proxylist"
 )
 
 type Manager struct {
